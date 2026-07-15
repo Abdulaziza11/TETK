@@ -9,6 +9,9 @@ from aiogram.fsm.state import State, StatesGroup
 from admin_panel import router as admin_router
 from database import init_db
 
+# Veb-server portini band qilish uchun aiohttp import qilamiz
+from aiohttp import web
+
 # Siz taqdim etgan Telegram Bot Tokeni
 BOT_TOKEN = "8885718773:AAE2KwDnnYKEUR7QNymmGR1Vz_1SlDX5CiE"
 SUPER_ADMIN_ID = 8676940332
@@ -247,11 +250,38 @@ async def check_expirations_loop(bot: Bot):
         await asyncio.sleep(86400)
 
 
+# =====================================================================
+# 🌐 RENDER PORTINI TINGLOVCHI VEB SERVER (PORT BINDING)
+# =====================================================================
+async def handle_ping(request):
+    """Render platformasi server yoniqligini tekshirish uchun yuboradigan so'rovga javob"""
+    return web.Response(text="Bot is running smoothly!")
+
+async def start_web_server():
+    """Loyiha fonda Render talab qiladigan portni eshitib turishi uchun veb-server"""
+    app = web.Application()
+    app.router.add_get('/', handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    # Render avtomatik ravishda muhitdan PORT o'zgaruvchisini taqdim etadi (bepul tarifda odatda 10000 bo'ladi)
+    port = int(os.environ.get("PORT", 8000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"Veb-server muvaffaqiyatli ishga tushdi: http://0.0.0.0:{port}")
+
+
+# =====================================================================
+# 🏁 MAIN
+# =====================================================================
 async def main():
     init_db()
     dp.include_router(admin_router)
     
-    # Orqa fonda avtomatik tekshiruvchini (scheduler) ishga tushirish
+    # 1. Render portni yopib, loyihani Timed Out qilib tashlamasligi uchun veb serverni ishga tushiramiz
+    await start_web_server()
+    
+    # 2. Orqa fonda avtomatik tekshiruvchini (scheduler) ishga tushirish
     asyncio.create_task(check_expirations_loop(bot))
     
     print("Bot va Avtomatik ogohlantirish xizmati muvaffaqiyatli ishga tushdi...")
