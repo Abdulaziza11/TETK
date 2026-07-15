@@ -1,2 +1,3 @@
-pyTelegramBotAPIrequests
+pyTelegramBotAPI
+requests
 aiogram
