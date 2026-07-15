@@ -39,13 +39,13 @@ def init_db():
     
     # Bo'limlar ro'yxati
     default_departments = [
-        ("Tezkor Ta'mirlash Bo'limi", "dep1_admin", "parol123"),
-        ("Yuqori Kuchlanish Bo'limi", "dep2_admin", "parol456"),
-        ("Kabel Tarmoqlari Bo'limi", "dep3_admin", "parol789"),
-        ("Rele Himoyasi Bo'limi", "dep4_admin", "parol111"),
-        ("O'lchov va Metrologiya", "dep5_admin", "parol222"),
-        ("Xavfsizlik Texnikasi Bo'limi", "dep6_admin", "parol333"),
-        ("Logistika va Ta'minot", "dep7_admin", "parol444")
+        ("Tezkor Navbatchilik Bo'limi", "Djalolov", "Lazizbek"),
+        ("1-tamirlash Bo'limi", "Muhiddinov", "Asliddin"),
+        ("2-tamirlash Bo'limi", "Ahmedov", "Toyirjon"),
+        ("3-tamirlash Bo'limi", "Xojiyev", "Abduvaxob"),
+        ("4-tamirlash bo'limi", "Xolmatov", "Saidabror"),
+        ("5-tamirlash bo'limi", "Mirzakarimov", "Ibrohim"),
+        ("ko'p qavatli binolarga xizmat ko'rsatish bo'limi", "Ibragimov", "Nodirbek")
     ]
     
     for name, login, password in default_departments:
