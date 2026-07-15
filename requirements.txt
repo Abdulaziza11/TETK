@@ -1,0 +1,2 @@
+pyTelegramBotAPIrequests
+aiogram
