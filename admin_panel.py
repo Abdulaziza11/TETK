@@ -8,7 +8,7 @@ from datetime import datetime
 router = Router()
 
 # 3 ta Super Adminlar ID ro'yxati
-SUPER_ADMIN_IDS = [8676940332, 123456789, 987654321]  # O'zingizga kerakli IDlarni yozasiz
+SUPER_ADMIN_IDS = [8676940332, 519149626, 987654321]  # O'zingizga kerakli IDlarni yozasiz
 
 def _escape_md(text: str) -> str:
     if text is None:
