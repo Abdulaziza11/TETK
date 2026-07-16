@@ -37,7 +37,7 @@ def init_db():
     )
     ''')
     
-    # 7 ta standart bo'limlar ro'yxati
+    # 7 ta standart bo'limlar ro'yxati (Vergul xatosi to'g'rilandi)
     default_departments = [
         ("Tezkor Navbatchilik Bo'limi", "Djalolov", "Lazizbek"),
         ("1-tamirlash Bo'limi", "Muhiddinov", "Asliddin"),
@@ -45,8 +45,8 @@ def init_db():
         ("3-tamirlash Bo'limi", "Xojiyev", "Abduvaxob"),
         ("4-tamirlash bo'limi", "Xolmatov", "Saidabror"),
         ("5-tamirlash bo'limi", "Mirzakarimov", "Ibrohim"),
-        ("6-ko'p qavatli binolarga xizmat ko'rsatish bo'limi", "Ibragimov", "Nodirbek")
-        ("7-DSHXKB Bo'limi","sharopov","Muhriddin")
+        ("6-ko'p qavatli binolarga xizmat ko'rsatish bo'limi", "Ibragimov", "Nodirbek"),
+        ("7-DSHXKB Bo'limi", "sharopov", "Muhriddin")
     ]
     
     for name, login, password in default_departments:
