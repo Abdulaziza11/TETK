@@ -6,15 +6,11 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from admin_panel import router as admin_router
+from admin_panel import router as admin_router, SUPER_ADMIN_IDS
 from database import init_db
-
-# Veb-server portini band qilish uchun aiohttp import qilamiz
 from aiohttp import web
 
-# Siz taqdim etgan Telegram Bot Tokeni
 BOT_TOKEN = "8885718773:AAE2KwDnnYKEUR7QNymmGR1Vz_1SlDX5CiE"
-SUPER_ADMIN_ID = 8676940332
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -33,10 +29,11 @@ class WorkerStates(StatesGroup):
 def get_main_keyboard(user_id):
     buttons = [
         [KeyboardButton(text="👤 Ishchi sifatida kirish")],
-        [KeyboardButton(text="🔑 Bo'lim Admini (Login)")]
+        [KeyboardButton(text="🔑 Bo'lim Admini (Login)")],
+        [KeyboardButton(text="👁 Mehmon / Tekshiruvchi kirishi")]
     ]
-    if int(user_id) == SUPER_ADMIN_ID:
-        buttons.append([KeyboardButton(text="🌐 Barcha bo'limlarni ko'rish (Super Admin)")])
+    if int(user_id) in SUPER_ADMIN_IDS:
+        buttons.append([KeyboardButton(text="👑 Super Admin Paneli")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 @dp.message(F.text == "/start")
@@ -51,25 +48,20 @@ async def send_welcome(message: Message, state: FSMContext):
     )
     await message.answer(welcome_text, reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
 
-# --- ISHCHI YO'LI ---
+
+# --- ISHCHI YO'LI (BO'LIMDAN VOSITALARNI OLADI) ---
 @dp.message(F.text == "👤 Ishchi sifatida kirish")
 async def worker_start(message: Message, state: FSMContext):
     await state.clear()
-    
     conn = sqlite3.connect('safety_bot.db')
     cursor = conn.cursor()
     cursor.execute('SELECT id, name FROM departments')
     depts = cursor.fetchall()
     conn.close()
 
-    if not depts:
-        await message.answer("Tizimda bo'limlar topilmadi.")
-        return
-
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=name, callback_data=f"work_dept_{d_id}")] for d_id, name in depts
     ])
-    
     await message.answer("Qaysi bo'limda ishlaysiz? Tanlang:", reply_markup=keyboard)
     await state.set_state(WorkerStates.selecting_department)
 
@@ -90,16 +82,17 @@ async def worker_select_name(callback: CallbackQuery, state: FSMContext):
         return
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=name, callback_data=f"work_id_{w_id}")] for w_id, name in workers
+        [InlineKeyboardButton(text=name, callback_data=f"work_id_{w_id}_{dept_id}")] for w_id, name in workers
     ])
-    
     await callback.message.edit_text("Ism-familiyangizni tanlang (Profil avtomatik tarzda bog'lanadi):", reply_markup=keyboard)
     await state.set_state(WorkerStates.selecting_name)
 
 @dp.callback_query(F.data.startswith("work_id_"))
 async def worker_show_tools(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
-    worker_id = int(callback.data.split("_")[2])
+    parts = callback.data.split("_")
+    worker_id = int(parts[2])
+    dept_id = int(parts[3])
     telegram_id = callback.from_user.id
 
     conn = sqlite3.connect('safety_bot.db')
@@ -107,184 +100,163 @@ async def worker_show_tools(callback: CallbackQuery, state: FSMContext):
     cursor.execute('UPDATE workers SET telegram_id=? WHERE id=?', (telegram_id, worker_id))
     cursor.execute('SELECT full_name FROM workers WHERE id=?', (worker_id,))
     worker_name = cursor.fetchone()[0]
-    cursor.execute('SELECT tool_name, expiry_date FROM safety_tools WHERE worker_id=?', (worker_id,))
+    
+    # Endi buyumlar to'g'ridan to'g'ri bo'limdan olinadi
+    cursor.execute('SELECT tool_name, expiry_date FROM safety_tools WHERE department_id=?', (dept_id,))
     tools = cursor.fetchall()
     conn.commit()
     conn.close()
 
     await state.clear()
 
-    response = f"🤝 Rahmat, **{escape_md(worker_name)}**!\nProfilingiz muvaffaqiyatli bog'landi va endi bildirishnomalar sizga shaxsan keladi.\n\n"
+    response = f"🤝 Rahmat, **{escape_md(worker_name)}**!\nProfilingiz muvaffaqiyatli bog'landi va endi sizga tegishli bo'limga oid bildirishnomalar sizga shaxsan keladi.\n\n"
     if not tools:
-        response += "Sizga hozircha hech qanday xavfsizlik vositasi biriktirilmagan."
+        response += "Sizning bo'limingizga hozircha hech qanday xavfsizlik vositasi kiritilmagan."
     else:
-        response += "🛠 **Sizga biriktirilgan asboblar va muddatlari:**\n"
+        response += "🛠 **Bo'limingizga biriktirilgan asboblar va muddatlari:**\n"
         for name, expiry in tools:
             response += f"• {escape_md(name)} — Muddati: {expiry} gacha\n"
             
     await callback.message.edit_text(response, parse_mode="Markdown")
 
-# --- SUPER ADMIN YO'LI ---
-@dp.message(F.text == "🌐 Barcha bo'limlarni ko'rish (Super Admin)")
-async def super_admin_view(message: Message):
-    if message.from_user.id != SUPER_ADMIN_ID:
-        await message.answer("Sizda ushbu amalni bajarish uchun ruxsat yo'q.")
-        return
 
+# --- MEHMON / TEKSHIRUVCHILAR TIZIMI (FAQAT KO'RISH) ---
+@dp.message(F.text == "👁 Mehmon / Tekshiruvchi kirishi")
+async def guest_view(message: Message):
     conn = sqlite3.connect('safety_bot.db')
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT d.name, w.full_name, t.tool_name, t.expiry_date 
-        FROM departments d
-        LEFT JOIN workers w ON d.id = w.department_id
-        LEFT JOIN safety_tools t ON w.id = t.worker_id
-        ORDER BY d.name, w.full_name
-    ''')
-    rows = cursor.fetchall()
-    conn.close()
-
-    if not rows:
-        await message.answer("Tizimda hech qanday ma'lumot topilmadi.")
-        return
-
-    report = "🌐 **Tashkilot bo'yicha umumiy xavfsizlik vositalari hisoboti:**\n"
-    current_dept = ""
-    current_worker = ""
+    cursor.execute('SELECT id, name FROM departments')
+    depts = cursor.fetchall()
     
-    for dept_name, worker_name, tool, expiry in rows:
-        if current_dept != dept_name:
-            current_dept = dept_name
-            report += f"\n🏢 **{escape_md(current_dept)}**\n"
-            current_worker = ""
-            
-        if worker_name:
-            if current_worker != worker_name:
-                current_worker = worker_name
-                report += f"  👤 {escape_md(current_worker)}:\n"
-            if tool:
-                report += f"    - {escape_md(tool)} (Muddati: {expiry})\n"
-            else:
-                report += "    - Biriktirilgan buyumlar yo'q\n"
+    report = "👁 **Mehmon/Tekshiruvchi rejimi:**\nTashkilot bo'yicha barcha ma'lumotlar bilan tanishing (O'zgartirish ruxsati yo'q):\n"
+    
+    for dept_id, dept_name in depts:
+        report += f"\n🏢 **{escape_md(dept_name)}**\n"
+        # Bo'limdagi asboblar
+        cursor.execute('SELECT tool_name, expiry_date FROM safety_tools WHERE department_id=?', (dept_id,))
+        tools = cursor.fetchall()
+        report += "  🛠 *Xavfsizlik vositalari:*\n"
+        if not tools:
+            report += "    - Vositalar biriktirilmagan\n"
         else:
-            report += "  - Bo'limda ishchilar yo'q\n"
-
+            for t_name, exp in tools:
+                report += f"    • {escape_md(t_name)} ({exp})\n"
+                
+        # Bo'limdagi ishchilar
+        cursor.execute('SELECT full_name FROM workers WHERE department_id=?', (dept_id,))
+        workers = cursor.fetchall()
+        report += "  👤 *Ishchilar ro'yxati:*\n"
+        if not workers:
+            report += "    - Ishchilar kiritilmagan\n"
+        else:
+            for w in workers:
+                report += f"    - {escape_md(w[0])}\n"
+    
+    conn.close()
+    
+    # 4000 belgidan oshsa bo'lib yuborish
     if len(report) > 4000:
-        chunks = []
-        current = ""
-        for line in report.split("\n"):
-            if len(current) + len(line) + 1 > 4000:
-                chunks.append(current)
-                current = ""
-            current += line + "\n"
-        if current:
-            chunks.append(current)
-        for chunk in chunks:
-            await message.answer(chunk, parse_mode="Markdown")
+        for i in range(0, len(report), 4000):
+            await message.answer(report[i:i+4000], parse_mode="Markdown")
     else:
         await message.answer(report, parse_mode="Markdown")
 
 
 # =====================================================================
-# 🚀 MUDDATLARNI AVTOMATIK TEKSHIRISH VA OGOHLANTIRISH XIZMATI (SCHEDULER)
+# 🚀 MUDDATLARNI AVTOMATIK TEKSHIRISH VA OGOHLANTIRISH XIZMATI
 # =====================================================================
 async def check_expirations_loop(bot: Bot):
-    """Har 24 soatda ishchilarning asbob-uskunalarini tekshiradi va
-    amal qilish muddati tugashiga 10, 5, 1 kun qolganda yoki tugagan kuni
-    hamda o'tib ketgan bo'lsa ishchi va adminga shaxsiy xabar yuboradi."""
+    """Har 24 soatda har bir bo'limning asbob-uskunalarini tekshiradi va
+    amal qilish muddati tugayotgan bo'lsa, o'sha bo'limdagi ro'yxatdan o'tgan
+    barcha ishchilarni va adminlarni ogohlantiradi."""
     while True:
         try:
             conn = sqlite3.connect('safety_bot.db')
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT t.tool_name, t.expiry_date, w.full_name, w.telegram_id, d.admin_telegram_id, d.name 
-                FROM safety_tools t 
-                JOIN workers w ON t.worker_id = w.id 
-                JOIN departments d ON w.department_id = d.id
+                SELECT id, name, admin_telegram_id FROM departments
             ''')
-            tools = cursor.fetchall()
-            conn.close()
+            departments = cursor.fetchall()
 
             today = datetime.now().date()
 
-            for tool_name, expiry_str, worker_name, worker_tg_id, admin_tg_id, dept_name in tools:
-                try:
-                    expiry_date = datetime.strptime(expiry_str.strip(), '%Y-%m-%d').date()
-                    days_left = (expiry_date - today).days
+            for dept_id, dept_name, admin_tg_id in departments:
+                # Bo'limga tegishli barcha vositalarni olamiz
+                cursor.execute('SELECT tool_name, expiry_date FROM safety_tools WHERE department_id=?', (dept_id,))
+                tools = cursor.fetchall()
+                
+                # Bo'limdagi barcha ro'yxatdan o'tgan ishchilarni olamiz (telegram_id is not NULL)
+                cursor.execute('SELECT telegram_id, full_name FROM workers WHERE department_id=? AND telegram_id IS NOT NULL', (dept_id,))
+                workers = cursor.fetchall()
 
-                    msg_worker = ""
-                    msg_admin = ""
+                for tool_name, expiry_str in tools:
+                    try:
+                        expiry_date = datetime.strptime(expiry_str.strip(), '%Y-%m-%d').date()
+                        days_left = (expiry_date - today).days
 
-                    # Bildirishnoma shartlari
-                    if days_left in [10, 5, 1]:
-                        msg_worker = f"⚠️ *Yaqinda muddat tugaydi!*\n\nHurmatli *{worker_name}*, sizga biriktirilgan *{tool_name}* vositasi muddati tugashiga *{days_left} kun* qoldi.\n🗓 Muddat: `{expiry_str}`"
-                        msg_admin = f"⚠️ *Xavfsizlik vositasi ogohlantirishi!*\n\n*{dept_name}* bo'limi ishchisi *{worker_name}* ga tegishli *{tool_name}* asbobining muddati tugashiga *{days_left} kun* qoldi.\n🗓 Muddat: `{expiry_str}`"
-                    elif days_left == 0:
-                        msg_worker = f"🚨 *MUHIM DIQQAT!*\n\nHurmatli *{worker_name}*, sizga biriktirilgan *{tool_name}* vositasining amal qilish muddati *BUGUN TUGADI*! Iltimos, undan foydalanmang va yangilang."
-                        msg_admin = f"🚨 *MUHIM OGOHLANTIRISH!*\n\n*{dept_name}* bo'limi ishchisi *{worker_name}* ga tegishli *{tool_name}* asbobining muddati *BUGUN TUGADI*!"
-                    elif days_left < 0:
-                        # Muddat o'tib ketgan bo'lsa
-                        msg_worker = f"❌ *XAVFLI VAZIYAT!*\n\nHurmatli *{worker_name}*, sizga tegishli *{tool_name}* asbobi muddati *{abs(days_left)} kun oldin o'tib ketgan!* Tezkorlik bilan almashtiring."
-                        msg_admin = f"❌ *MUDDAT O'TIB KETGAN!*\n\n*{dept_name}* bo'limi ishchisi *{worker_name}* ga tegishli *{tool_name}* asbobi muddati *{abs(days_left)} kun oldin tugagan!*"
+                        msg_worker = ""
+                        msg_admin = ""
 
-                    # Agar xabar shakllangan bo'lsa, uni yuboramiz
-                    if msg_worker and worker_tg_id:
-                        try:
-                            await bot.send_message(chat_id=worker_tg_id, text=msg_worker, parse_mode="Markdown")
-                        except Exception as e:
-                            print(f"Ishchiga yuborishda xato ({worker_name}): {e}")
+                        # Bildirishnoma shartlari
+                        if days_left in [10, 5, 1]:
+                            msg_worker = f"⚠️ *Yaqinda muddat tugaydi!*\n\nBo'limingizga tegishli *{tool_name}* vositasi muddati tugashiga *{days_left} kun* qoldi.\n🗓 Muddat: `{expiry_str}`"
+                            msg_admin = f"⚠️ *Bo'lim asbobi ogohlantirishi!*\n\n*{dept_name}* bo'limidagi *{tool_name}* asbobining muddati tugashiga *{days_left} kun* qoldi.\n🗓 Muddat: `{expiry_str}`"
+                        elif days_left == 0:
+                            msg_worker = f"🚨 *MUHIM DIQQAT!*\n\nBo'limingizga tegishli *{tool_name}* vositasining amal qilish muddati *BUGUN TUGADI*! Undan foydalanmang va tezda yangilanishini kuting."
+                            msg_admin = f"🚨 *MUHIM OGOHLANTIRISH!*\n\n*{dept_name}* bo'limidagi *{tool_name}* asbobining muddati *BUGUN TUGADI*!"
+                        elif days_left < 0:
+                            msg_worker = f"❌ *XAVFLI VAZIYAT!*\n\nBo'limingizga tegishli *{tool_name}* asbobi muddati *{abs(days_left)} kun oldin o'tib ketgan!* Ishlatish taqiqlanadi."
+                            msg_admin = f"❌ *MUDDAT O'TIB KETGAN!*\n\n*{dept_name}* bo'limidagi *{tool_name}* asbobi muddati *{abs(days_left)} kun oldin tugagan!*"
 
-                    if msg_admin and admin_tg_id:
-                        try:
-                            await bot.send_message(chat_id=admin_tg_id, text=msg_admin, parse_mode="Markdown")
-                        except Exception as e:
-                            print(f"Adminga yuborishda xato ({dept_name}): {e}")
+                        # Xabarlarni tarqatish
+                        if msg_worker and workers:
+                            for worker_tg_id, w_name in workers:
+                                try:
+                                    await bot.send_message(chat_id=worker_tg_id, text=msg_worker, parse_mode="Markdown")
+                                except Exception:
+                                    pass
 
-                except ValueError:
-                    # Baza ichidagi sana formati YYYY-MM-DD bo'lmasa, xatoni o'tkazib yuborish
-                    continue
+                        if msg_admin and admin_tg_id:
+                            try:
+                                await bot.send_message(chat_id=admin_tg_id, text=msg_admin, parse_mode="Markdown")
+                            except Exception:
+                                pass
 
+                    except ValueError:
+                        continue
+
+            conn.close()
         except Exception as err:
             print(f"Tekshirish loopida xatolik: {err}")
 
-        # Tekshiruv kuniga 1 marta ishlaydi (86400 soniya)
+        # Tekshiruv har 24 soatda ishlaydi (86400 soniya)
         await asyncio.sleep(86400)
 
 
 # =====================================================================
-# 🌐 RENDER PORTINI TINGLOVCHI VEB SERVER (PORT BINDING)
+# 🌐 RENDER PORTINI TINGLOVCHI VEB SERVER
 # =====================================================================
 async def handle_ping(request):
-    """Render platformasi server yoniqligini tekshirish uchun yuboradigan so'rovga javob"""
-    return web.Response(text="Bot is running smoothly!")
+    return web.Response(text="Bot is running smoothly with multi-super-admin!")
 
 async def start_web_server():
-    """Loyiha fonda Render talab qiladigan portni eshitib turishi uchun veb-server"""
     app = web.Application()
     app.router.add_get('/', handle_ping)
     runner = web.AppRunner(app)
     await runner.setup()
     
-    # Render avtomatik ravishda muhitdan PORT o'zgaruvchisini taqdim etadi (bepul tarifda odatda 10000 bo'ladi)
     port = int(os.environ.get("PORT", 8000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"Veb-server muvaffaqiyatli ishga tushdi: http://0.0.0.0:{port}")
 
-
-# =====================================================================
-# 🏁 MAIN
-# =====================================================================
 async def main():
     init_db()
     dp.include_router(admin_router)
     
-    # 1. Render portni yopib, loyihani Timed Out qilib tashlamasligi uchun veb serverni ishga tushiramiz
     await start_web_server()
-    
-    # 2. Orqa fonda avtomatik tekshiruvchini (scheduler) ishga tushirish
     asyncio.create_task(check_expirations_loop(bot))
     
-    print("Bot va Avtomatik ogohlantirish xizmati muvaffaqiyatli ishga tushdi...")
+    print("Bot muvaffaqiyatli ishga tushdi...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
