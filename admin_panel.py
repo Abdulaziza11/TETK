@@ -7,8 +7,8 @@ from datetime import datetime
 
 router = Router()
 
-# 3 ta Super Adminlar ID ro'yxati
-SUPER_ADMIN_IDS = [8676940332, 519149626, 987654321][cite: 2]
+# 3 ta Super Adminlar ID ro'yxati (Sintaktik xato olib tashlandi)
+SUPER_ADMIN_IDS = [8676940332, 519149626, 987654321]
 
 def _escape_md(text: str) -> str:
     if text is None:
@@ -31,7 +31,6 @@ class AdminStates(StatesGroup):
     updating_tool_expiry = State()
 
 def get_admin_keyboard(is_super=False):
-    # Ishchi qo'shish va o'chirish tugmalari olib tashlandi
     buttons = [
         [KeyboardButton(text="🛠 Bo'limga buyum biriktirish"), KeyboardButton(text="🔄 Vosita muddatini yangilash")],
         [KeyboardButton(text="📊 Bo'lim hisoboti"), KeyboardButton(text="🚪 Chiqish")]
@@ -41,7 +40,6 @@ def get_admin_keyboard(is_super=False):
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 def get_main_keyboard_fallback(user_id):
-    # Ishchi sifatida kirish tugmasi olib tashlandi
     buttons = [
         [KeyboardButton(text="🔑 Bo'lim Admini (Login)")],
         [KeyboardButton(text="👁 Mehmon / Tekshiruvchi kirishi")]
@@ -96,7 +94,7 @@ async def super_admin_dept_selected(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.admin_menu, F.text == "🏢 Bo'limni o'zgartirish (Super Admin)")
 async def change_dept_super(message: Message, state: FSMContext):
     data = await state.get_data()
-    if not data.get('is_super'):
+    if message.from_user.id not in SUPER_ADMIN_IDS or not data.get('is_super'):
         await message.answer("Sizda bunday ruxsat yo'q.")
         return
     await super_admin_panel_start(message, state)
