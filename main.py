@@ -9,7 +9,7 @@ from admin_panel import router as admin_router, SUPER_ADMIN_IDS
 from database import init_db
 from aiohttp import web
 
-BOT_TOKEN = "8885718773:AAE2KwDnnYKEUR7QNymmGR1Vz_1SlDX5CiE"[cite: 4]
+BOT_TOKEN = "8885718773:AAE2KwDnnYKEUR7QNymmGR1Vz_1SlDX5CiE"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -22,7 +22,6 @@ def escape_md(text: str) -> str:
     return text
 
 def get_main_keyboard(user_id):
-    # Ishchi sifatida kirish tugmasi olib tashlandi
     buttons = [
         [KeyboardButton(text="🔑 Bo'lim Admini (Login)")],
         [KeyboardButton(text="👁 Mehmon / Tekshiruvchi kirishi")]
@@ -56,7 +55,6 @@ async def guest_view(message: Message):
     
     for dept_id, dept_name in depts:
         report += f"\n🏢 **{escape_md(dept_name)}**\n"
-        # Bo'limdagi asboblar
         cursor.execute('SELECT tool_name, expiry_date FROM safety_tools WHERE department_id=?', (dept_id,))
         tools = cursor.fetchall()
         report += "  🛠 *Xavfsizlik vositalari:*\n"
@@ -79,9 +77,6 @@ async def guest_view(message: Message):
 # 🚀 MUDDATLARNI AVTOMATIK TEKSHIRISH VA OGOHLANTIRISH XIZMATI
 # =====================================================================
 async def check_expirations_loop(bot: Bot):
-    """Har 24 soatda har bir bo'limning asbob-uskunalarini tekshiradi va
-    amal qilish muddati tugayotgan bo'lsa, o'sha bo'limdagi ro'yxatdan o'tgan
-    adminlarni ogohlantiradi."""
     while True:
         try:
             conn = sqlite3.connect('safety_bot.db')
@@ -102,7 +97,6 @@ async def check_expirations_loop(bot: Bot):
 
                         msg_admin = ""
 
-                        # Bildirishnoma shartlari
                         if days_left in [10, 5, 1]:
                             msg_admin = f"⚠️ *Bo'lim asbobi ogohlantirishi!*\n\n*{dept_name}* bo'limidagi *{tool_name}* asbobining muddati tugashiga *{days_left} kun* qoldi.\n🗓 Muddat: `{expiry_str}`"
                         elif days_left == 0:
