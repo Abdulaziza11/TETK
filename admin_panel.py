@@ -8,7 +8,7 @@ from datetime import datetime
 router = Router()
 
 # 3 ta Super Adminlar ID ro'yxati
-SUPER_ADMIN_IDS = [8676940332, 519149626, 987654321]  # O'zingizga kerakli IDlarni yozasiz
+SUPER_ADMIN_IDS = [8676940332, 519149626, 987654321][cite: 2]
 
 def _escape_md(text: str) -> str:
     if text is None:
@@ -24,10 +24,6 @@ class AdminStates(StatesGroup):
     # Super Admin uchun maxsus
     selecting_dept_to_manage = State()
     
-    # Ishchi boshqaruvi
-    adding_worker = State()
-    deleting_worker = State()
-    
     # Himoya vositasi boshqaruvi
     adding_tool_name = State()
     adding_tool_expiry = State()
@@ -35,8 +31,8 @@ class AdminStates(StatesGroup):
     updating_tool_expiry = State()
 
 def get_admin_keyboard(is_super=False):
+    # Ishchi qo'shish va o'chirish tugmalari olib tashlandi
     buttons = [
-        [KeyboardButton(text="➕ Yangi ishchi qo'shish"), KeyboardButton(text="❌ Ishchini o'chirish")],
         [KeyboardButton(text="🛠 Bo'limga buyum biriktirish"), KeyboardButton(text="🔄 Vosita muddatini yangilash")],
         [KeyboardButton(text="📊 Bo'lim hisoboti"), KeyboardButton(text="🚪 Chiqish")]
     ]
@@ -45,8 +41,8 @@ def get_admin_keyboard(is_super=False):
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 def get_main_keyboard_fallback(user_id):
+    # Ishchi sifatida kirish tugmasi olib tashlandi
     buttons = [
-        [KeyboardButton(text="👤 Ishchi sifatida kirish")],
         [KeyboardButton(text="🔑 Bo'lim Admini (Login)")],
         [KeyboardButton(text="👁 Mehmon / Tekshiruvchi kirishi")]
     ]
@@ -74,7 +70,7 @@ async def super_admin_panel_start(message: Message, state: FSMContext):
         [InlineKeyboardButton(text=name, callback_data=f"manage_dept_{d_id}")] for d_id, name in depts
     ])
     
-    await message.answer("👑 **Super Admin Paneli.**\nBoshqarish uchun 7 ta bo'limdan birini tanlang:", reply_markup=keyboard)
+    await message.answer("👑 **Super Admin Paneli.**\nBoshqarish uchun bo'limlardan birini tanlang:", reply_markup=keyboard)
     await state.set_state(AdminStates.selecting_dept_to_manage)
 
 
@@ -138,69 +134,7 @@ async def admin_login_verify(message: Message, state: FSMContext):
     conn.close()
 
 
-# --- ISHCHI QO'SHISH ---
-@router.message(AdminStates.admin_menu, F.text == "➕ Yangi ishchi qo'shish")
-async def add_worker_start(message: Message, state: FSMContext):
-    await message.answer("Yangi ishchining Ism va Familiyasini kiriting:")
-    await state.set_state(AdminStates.adding_worker)
-
-@router.message(AdminStates.adding_worker)
-async def add_worker_save(message: Message, state: FSMContext):
-    data = await state.get_data()
-    dept_id = data.get('dept_id')
-    is_super = data.get('is_super', False)
-    worker_name = message.text
-    
-    conn = sqlite3.connect('safety_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO workers (full_name, department_id) VALUES (?, ?)', (worker_name, dept_id))
-    conn.commit()
-    conn.close()
-    
-    await message.answer(f"✅ Ishchi '{worker_name}' muvaffaqiyatli qo'shildi!", reply_markup=get_admin_keyboard(is_super))
-    await state.set_state(AdminStates.admin_menu)
-
-
-# --- ISHCHINI O'CHIRISH ---
-@router.message(AdminStates.admin_menu, F.text == "❌ Ishchini o'chirish")
-async def delete_worker_start(message: Message, state: FSMContext):
-    data = await state.get_data()
-    dept_id = data.get('dept_id')
-
-    conn = sqlite3.connect('safety_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, full_name FROM workers WHERE department_id=?', (dept_id,))
-    workers = cursor.fetchall()
-    conn.close()
-
-    if not workers:
-        await message.answer("Ushbu bo'limda o'chirish uchun ishchilar yo'q.")
-        return
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"❌ {name}", callback_data=f"del_w_{w_id}")] for w_id, name in workers
-    ])
-    await message.answer("O'chirmoqchi bo'lgan ishchini tanlang:", reply_markup=keyboard)
-    await state.set_state(AdminStates.deleting_worker)
-
-@router.callback_query(AdminStates.deleting_worker, F.data.startswith("del_w_"))
-async def delete_worker_confirm(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    worker_id = int(callback.data.split("_")[2])
-    data = await state.get_data()
-    is_super = data.get('is_super', False)
-    
-    conn = sqlite3.connect('safety_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM workers WHERE id=?', (worker_id,))
-    conn.commit()
-    conn.close()
-
-    await callback.message.edit_text("✅ Ishchi tizimdan muvaffaqiyatli o'chirildi!")
-    await state.set_state(AdminStates.admin_menu)
-
-
-# --- BO'LIMGA BUYUM BIRIKTIRISH (YANGI LOGIKA) ---
+# --- BO'LIMGA BUYUM BIRIKTIRISH ---
 @router.message(AdminStates.admin_menu, F.text == "🛠 Bo'limga buyum biriktirish")
 async def add_tool_to_dept_start(message: Message, state: FSMContext):
     await message.answer("Ushbu bo'limga biriktiriladigan xavfsizlik vositasi nomini kiriting (Masalan: `Kaska`, `Kabel`):")
@@ -298,28 +232,18 @@ async def view_report(message: Message, state: FSMContext):
     
     conn = sqlite3.connect('safety_bot.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT full_name FROM workers WHERE department_id=?', (dept_id,))
-    workers = cursor.fetchall()
     cursor.execute('SELECT tool_name, expiry_date FROM safety_tools WHERE department_id=?', (dept_id,))
     tools = cursor.fetchall()
     conn.close()
     
     report = f"📋 **{_escape_md(dept_name)} - Bo'limi Hisoboti:**\n\n"
     
-    # Bo'limdagi barcha vositalar
     report += "🛠 **Bo'limga biriktirilgan xavfsizlik vositalari:**\n"
     if not tools:
         report += "  - Biriktirilgan vositalar yo'q\n"
     else:
         for t_name, exp in tools:
             report += f"  • {t_name} (Muddat: `{exp}`)\n"
-            
-    report += "\n👤 **Bo'lim ishchilari ro'yxati:**\n"
-    if not workers:
-        report += "  - Bo'limda ishchilar ro'yxatdan o'tmagan\n"
-    else:
-        for w in workers:
-            report += f"  - {w[0]}\n"
             
     await message.answer(report, parse_mode="Markdown")
 
