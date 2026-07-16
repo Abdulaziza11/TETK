@@ -4,7 +4,7 @@ def init_db():
     conn = sqlite3.connect('safety_bot.db')
     cursor = conn.cursor()
     
-    # Bo'limlar jadvali (admin_telegram_id bilan)
+    # 1. Bo'limlar jadvali (admin_telegram_id bilan)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS departments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,7 +15,7 @@ def init_db():
     )
     ''')
     
-    # Ishchilar jadvali (telegram_id bilan)
+    # 2. Ishchilar jadvali
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS workers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,18 +26,18 @@ def init_db():
     )
     ''')
     
-    # Xavfsizlik vositalari jadvali
+    # 3. Xavfsizlik vositalari jadvali (Worker o'rniga Department ga ulaymiz)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS safety_tools (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        worker_id INTEGER,
+        department_id INTEGER,
         tool_name TEXT NOT NULL,
         expiry_date TEXT NOT NULL,
-        FOREIGN KEY (worker_id) REFERENCES workers (id)
+        FOREIGN KEY (department_id) REFERENCES departments (id)
     )
     ''')
     
-    # Bo'limlar ro'yxati
+    # 7 ta standart bo'limlar ro'yxati
     default_departments = [
         ("Tezkor Navbatchilik Bo'limi", "Djalolov", "Lazizbek"),
         ("1-tamirlash Bo'limi", "Muhiddinov", "Asliddin"),
@@ -59,4 +59,4 @@ def init_db():
 
 if __name__ == '__main__':
     init_db()
-    print("Baza yangilandi va tayyor!")
+    print("Baza yangi loyihaga muvofiq muvaffaqiyatli yangilandi!")
