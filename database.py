@@ -45,7 +45,8 @@ def init_db():
         ("3-tamirlash Bo'limi", "Xojiyev", "Abduvaxob"),
         ("4-tamirlash bo'limi", "Xolmatov", "Saidabror"),
         ("5-tamirlash bo'limi", "Mirzakarimov", "Ibrohim"),
-        ("ko'p qavatli binolarga xizmat ko'rsatish bo'limi", "Ibragimov", "Nodirbek")
+        ("6-ko'p qavatli binolarga xizmat ko'rsatish bo'limi", "Ibragimov", "Nodirbek")
+        ("7-DSHXKB Bo'limi","sharopov","Muhriddin")
     ]
     
     for name, login, password in default_departments:
